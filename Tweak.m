@@ -1,5 +1,6 @@
 #import <UIKit/UIKit.h>
 #import <AVFoundation/AVFoundation.h>
+#import <MediaPlayer/MediaPlayer.h>
 #import <objc/runtime.h>
 #import <math.h>
 
@@ -24,8 +25,17 @@
 + (instancetype)shared;
 @property (nonatomic, strong) NSArray *queue;
 @property (nonatomic, strong) RDSong *currentSong;
+@property (nonatomic, strong) UIImage *currentArtwork;
+- (BOOL)isPlaying;
+- (double)duration;
+- (double)currentTime;
 - (void)playSong:(RDSong *)song inQueue:(NSArray *)queue;
 - (void)itemDidFinishPlaying:(NSNotification *)notification;
+- (void)updateNowPlayingInfo;
+@end
+
+@interface RDPlayer (EnhancerNowPlaying)
+- (void)rd_updateNowPlayingInfo;
 @end
 
 @interface RDCache : NSObject
@@ -126,6 +136,44 @@ static void RDShowAlert(NSString *title, NSString *message) {
         }
     }
     [self rd_itemDidFinishPlaying:notification];
+}
+@end
+
+@implementation RDPlayer (EnhancerNowPlaying)
+- (void)rd_updateNowPlayingInfo {
+    [self rd_updateNowPlayingInfo];
+
+    RDSong *song = [self currentSong];
+    if (!song) {
+        return;
+    }
+
+    NSMutableDictionary *info = [NSMutableDictionary dictionary];
+    NSDictionary *existing = [[MPNowPlayingInfoCenter defaultCenter] nowPlayingInfo];
+    if (existing) {
+        [info addEntriesFromDictionary:existing];
+    }
+    if (RDString(song.name).length) {
+        [info setObject:RDString(song.name) forKey:MPMediaItemPropertyTitle];
+    }
+    if (RDString(song.artist).length) {
+        [info setObject:RDString(song.artist) forKey:MPMediaItemPropertyArtist];
+    }
+    if (RDString(song.album).length) {
+        [info setObject:RDString(song.album) forKey:MPMediaItemPropertyAlbumTitle];
+    }
+    [info setObject:[NSNumber numberWithDouble:[self duration]] forKey:MPMediaItemPropertyPlaybackDuration];
+    [info setObject:[NSNumber numberWithDouble:[self currentTime]] forKey:MPNowPlayingInfoPropertyElapsedPlaybackTime];
+    [info setObject:[NSNumber numberWithDouble:([self isPlaying] ? 1.0 : 0.0)] forKey:MPNowPlayingInfoPropertyPlaybackRate];
+
+    UIImage *artwork = [self currentArtwork];
+    if (artwork) {
+        MPMediaItemArtwork *mediaArtwork = [[MPMediaItemArtwork alloc] initWithImage:artwork];
+        if (mediaArtwork) {
+            [info setObject:mediaArtwork forKey:MPMediaItemPropertyArtwork];
+        }
+    }
+    [[MPNowPlayingInfoCenter defaultCenter] setNowPlayingInfo:info];
 }
 @end
 
@@ -653,6 +701,7 @@ static NSString * const kRDFavoritesKey = @"RainyDayFavoritesV1";
 @implementation RDMainViewController (EnhancerUI)
 - (void)rd_viewDidAppear:(BOOL)animated {
     [self rd_viewDidAppear:animated];
+    [[UIApplication sharedApplication] beginReceivingRemoteControlEvents];
     [self rd_installToolsButton];
 }
 
@@ -696,6 +745,7 @@ static void RainyDayEnhancerInit(void) {
     Class playerClass = objc_getClass("RDPlayer");
     if (playerClass) {
         RDSwizzle(playerClass, @selector(itemDidFinishPlaying:), @selector(rd_itemDidFinishPlaying:));
+        RDSwizzle(playerClass, @selector(updateNowPlayingInfo), @selector(rd_updateNowPlayingInfo));
     }
     Class mainClass = objc_getClass("RDMainViewController");
     if (mainClass) {
