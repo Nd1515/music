@@ -1,0 +1,44 @@
+name: Build RainyDay Enhancer
+
+on: [push, workflow_dispatch]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential fakeroot rsync curl perl zip git libxml2 libtinfo6 xz-utils libssl-dev libplist-dev dpkg
+          if ! command -v ldid >/dev/null 2>&1; then
+            git clone --depth 1 https://github.com/ProcursusTeam/ldid.git /tmp/ldid
+            make -C /tmp/ldid -j2
+            sudo install -m 0755 /tmp/ldid/ldid /usr/local/bin/ldid
+          fi
+
+      - name: Install Theos
+        env:
+          CI: 1
+        run: |
+          bash -c "$(curl -fsSL https://raw.githubusercontent.com/theos/theos/master/bin/install-theos)"
+          echo "THEOS=$HOME/theos" >> "$GITHUB_ENV"
+
+      - name: Install iOS 10.3 SDK
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          "$THEOS/bin/install-sdk" iPhoneOS10.3
+          echo "SDK_VERSION=10.3" >> "$GITHUB_ENV"
+
+      - name: Build tweak
+        run: |
+          make clean package FINALPACKAGE=1 TARGET=iphone:clang:10.3:6.0
+          find packages -type f -name '*.deb' -print
+
+      - name: Upload deb
+        uses: actions/upload-artifact@v4
+        with:
+          name: RainyDayEnhancer-deb
+          path: packages/*.deb
