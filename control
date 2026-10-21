@@ -1,0 +1,9 @@
+Package: com.example.rainydayenhancer
+Name: RainyDay 增强
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: 为 RainyDay 添加单曲/专辑收藏、收藏播放、缓存管理，并修复播放几秒误跳下一首。
+Maintainer: RainyDay User
+Author: RainyDay User
+Section: Tweaks
+Depends: mobilesubstrate
